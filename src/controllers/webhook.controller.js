@@ -339,10 +339,10 @@ exports.handleWebhookSim = async (req, res) => {
         {
           title: "Evaluados",
           rows: evaluados.map((e, i) => ({
-            id: `eval_${i + 1}`,
-            title: `${e.evaluado} - ${e.nombre}`,
-            description: e.puesto || "Sin puesto"
-          }))
+          id: `eval_${i + 1}`,
+          title: String(e.evaluado).slice(0, 24),
+          description: `${e.nombre}`.slice(0, 72)
+        }))
         }
       ];
 
@@ -379,10 +379,10 @@ exports.handleWebhookSim = async (req, res) => {
           {
             title: "Evaluados",
             rows: evaluados.map((e, i) => ({
-              id: `eval_${i + 1}`,
-              title: `${e.evaluado} - ${e.nombre}`,
-              description: e.puesto || "Sin puesto"
-            }))
+            id: `eval_${i + 1}`,
+            title: String(e.evaluado).slice(0, 24),
+            description: `${e.nombre}`.slice(0, 72)
+          }))
           }
         ];
 
@@ -675,7 +675,7 @@ exports.receiveWebhook = async (req, res) => {
 
     const fakeRes = {
       json(payload) {
-        botReply = payload?.reply || "No hubo respuesta del bot.";
+        botReply = payload;
         return payload;
       },
       status(code) {
@@ -691,7 +691,7 @@ exports.receiveWebhook = async (req, res) => {
     await exports.handleWebhookSim(fakeReq, fakeRes);
 
     if (botReply) {
-      await sendWhatsAppText(from, botReply);
+      await replyToUser(from, botReply);
     }
 
     return res.sendStatus(200);
