@@ -336,7 +336,7 @@ exports.handleWebhookSim = async (req, res) => {
       const evaluados = await getEvaluadosByUser(session.evaluador_user);
 
       const rows = evaluados.slice(0, 10).map((e, i) => ({
-        id: `eval_${i + 1}`,
+        id: `e${i + 1}`,
         title: String(e.evaluado).slice(0, 24),
         description: String(e.nombre || "").slice(0, 72)
       }));
@@ -378,7 +378,7 @@ exports.handleWebhookSim = async (req, res) => {
 
       if (Number.isNaN(idx) || idx < 0 || idx >= evaluados.length) {
         const rows = evaluados.slice(0, 10).map((e, i) => ({
-        id: `eval_${i + 1}`,
+        id: `e${i + 1}`,
         title: String(e.evaluado).slice(0, 24),
         description: String(e.nombre || "").slice(0, 72)
       }));
