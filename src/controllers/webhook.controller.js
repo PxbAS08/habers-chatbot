@@ -335,14 +335,16 @@ exports.handleWebhookSim = async (req, res) => {
 
       const evaluados = await getEvaluadosByUser(session.evaluador_user);
 
+      const rows = evaluados.slice(0, 10).map((e, i) => ({
+        id: `eval_${i + 1}`,
+        title: String(e.evaluado).slice(0, 24),
+        description: String(e.nombre || "").slice(0, 72)
+      }));
+
       const sections = [
         {
           title: "Evaluados",
-          rows: evaluados.map((e, i) => ({
-          id: `eval_${i + 1}`,
-          title: String(e.evaluado).slice(0, 24),
-          description: `${e.nombre}`.slice(0, 72)
-        }))
+          rows
         }
       ];
 
@@ -350,7 +352,7 @@ exports.handleWebhookSim = async (req, res) => {
 
       const reply = {
         type: "list",
-        text: "Selecciona a quién vas a evaluar:",
+        text: "Selecciona a quién vas a evaluar (Primeros 10):",
         buttonText: "Ver evaluados",
         sections
       };
@@ -375,20 +377,22 @@ exports.handleWebhookSim = async (req, res) => {
       }
 
       if (Number.isNaN(idx) || idx < 0 || idx >= evaluados.length) {
-        const sections = [
-          {
-            title: "Evaluados",
-            rows: evaluados.map((e, i) => ({
-            id: `eval_${i + 1}`,
-            title: String(e.evaluado).slice(0, 24),
-            description: `${e.nombre}`.slice(0, 72)
-          }))
-          }
-        ];
+        const rows = evaluados.slice(0, 10).map((e, i) => ({
+        id: `eval_${i + 1}`,
+        title: String(e.evaluado).slice(0, 24),
+        description: String(e.nombre || "").slice(0, 72)
+      }));
+
+      const sections = [
+        {
+          title: "Evaluados",
+          rows
+        }
+      ];
 
         const reply = {
           type: "list",
-          text: "Selecciona un evaluado válido:",
+          text: "Selecciona un evaluado válido (Primeros 10):",
           buttonText: "Ver evaluados",
           sections
         };
