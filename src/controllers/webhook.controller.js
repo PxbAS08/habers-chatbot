@@ -104,6 +104,47 @@ async function replyToUser(phone, reply) {
   return null;
 }
 
+function buildEvaluadosList(evaluados, page = 0, pageSize = 9) {
+  const total = evaluados.length;
+  const start = page * pageSize;
+  const end = start + pageSize;
+  const slice = evaluados.slice(start, end);
+
+  const rows = slice.map((e) => ({
+    id: `emp_${e.evaluado}`,
+    title: String(e.evaluado).slice(0, 24),
+    description: String(e.nombre || "").slice(0, 72)
+  }));
+
+  if (end < total) {
+    rows.push({
+      id: "page_next",
+      title: "Siguiente",
+      description: "Ver más evaluados"
+    });
+  }
+
+  if (page > 0) {
+    rows.push({
+      id: "page_prev",
+      title: "Anterior",
+      description: "Ver evaluados previos"
+    });
+  }
+
+  return {
+    type: "list",
+    text: `Selecciona a quién vas a evaluar (página ${page + 1}):`,
+    buttonText: "Ver evaluados",
+    sections: [
+      {
+        title: "Evaluados",
+        rows
+      }
+    ]
+  };
+}
+
 exports.handleWebhookSim = async (req, res) => {
   try {
     // Simulación simple: phone y text
@@ -175,15 +216,13 @@ exports.handleWebhookSim = async (req, res) => {
         return res.json(msg("Ese detalle no existe. Intenta con 1 a 5."));
       }
 
-      // ⚠️ Aquí llamas a tu servicio que trae el detalle por ID
-      // (si aún no lo tienes, dímelo y te lo doy)
       const row = await getDetalleById(targetId);
       if (!row) return res.json(msg("No se encontró esa evaluación."));
 
       return res.json(msg(formatDetalle(row)));
     }
 
-    // 🔹 2) Reset automático si escriben número en otro estado
+    // 2) Reset automático si escriben número en otro estado
     if (/^\d{3,10}$/.test(t) && session.estado !== "LOGIN") {
     await resetSession(phone);
     return res.json(msg("Sesión reiniciada. Escribe tu *número de empleado* para iniciar."));
@@ -335,8 +374,8 @@ exports.handleWebhookSim = async (req, res) => {
 
       const evaluados = await getEvaluadosByUser(session.evaluador_user);
 
-      const rows = evaluados.slice(0, 10).map((e, i) => ({
-        id: `e${i + 1}`,
+      const rows = evaluados.slice(0, 9).map((e) => ({
+        id: `emp_${e.evaluado}`,
         title: String(e.evaluado).slice(0, 24),
         description: String(e.nombre || "").slice(0, 72)
       }));
@@ -348,7 +387,19 @@ exports.handleWebhookSim = async (req, res) => {
         }
       ];
 
-      await updateSession(phone, { estado: "EVALUADO", tipo_eval });
+      if (evaluados.length > 9) {
+        rows.push({
+          id: "page_next",
+          title: "Siguiente",
+          description: "Ver más evaluados"
+        });
+      }
+
+      await updateSession(phone, {
+        estado: "EVALUADO",
+        tipo_eval,
+        pagina_evaluados: 0
+      });
 
       const reply = {
         type: "list",
@@ -367,32 +418,49 @@ exports.handleWebhookSim = async (req, res) => {
 
     if (session.estado === "EVALUADO") {
       const evaluados = await getEvaluadosByUser(session.evaluador_user);
+      const page = Number(session.pagina_evaluados || 0);
+      const pageSize = 9;
 
-      let idx = -1;
+      // navegación
+      if (t === "page_next") {
+        const nextPage = page + 1;
+        const start = nextPage * pageSize;
+        const end = start + pageSize;
 
-      if (/^eval_\d+$/.test(t)) {
-        idx = Number(t.split("_")[1]) - 1;
-      } else {
-        idx = Number(t) - 1;
-      }
+        const rows = evaluados.slice(start, end).map((e) => ({
+          id: `emp_${e.evaluado}`,
+          title: String(e.evaluado).slice(0, 24),
+          description: String(e.nombre || "").slice(0, 72)
+        }));
 
-      if (Number.isNaN(idx) || idx < 0 || idx >= evaluados.length) {
-        const rows = evaluados.slice(0, 10).map((e, i) => ({
-        id: `e${i + 1}`,
-        title: String(e.evaluado).slice(0, 24),
-        description: String(e.nombre || "").slice(0, 72)
-      }));
-
-      const sections = [
-        {
-          title: "Evaluados",
-          rows
+        if (end < evaluados.length) {
+          rows.push({
+            id: "page_next",
+            title: "Siguiente",
+            description: "Ver más evaluados"
+          });
         }
-      ];
+
+        if (nextPage > 0) {
+          rows.push({
+            id: "page_prev",
+            title: "Anterior",
+            description: "Ver evaluados previos"
+          });
+        }
+
+        const sections = [
+          {
+            title: "Evaluados",
+            rows
+          }
+        ];
+
+        await updateSession(phone, { pagina_evaluados: nextPage });
 
         const reply = {
           type: "list",
-          text: "Selecciona un evaluado válido (Primeros 10):",
+          text: `Selecciona a quién vas a evaluar (página ${nextPage + 1}):`,
           buttonText: "Ver evaluados",
           sections
         };
@@ -405,7 +473,114 @@ exports.handleWebhookSim = async (req, res) => {
         return res.sendStatus(200);
       }
 
-      const elegido = evaluados[idx];
+      if (t === "page_prev") {
+        const prevPage = Math.max(0, page - 1);
+        const start = prevPage * pageSize;
+        const end = start + pageSize;
+
+        const rows = evaluados.slice(start, end).map((e) => ({
+          id: `emp_${e.evaluado}`,
+          title: String(e.evaluado).slice(0, 24),
+          description: String(e.nombre || "").slice(0, 72)
+        }));
+
+        if (end < evaluados.length) {
+          rows.push({
+            id: "page_next",
+            title: "Siguiente",
+            description: "Ver más evaluados"
+          });
+        }
+
+        if (prevPage > 0) {
+          rows.push({
+            id: "page_prev",
+            title: "Anterior",
+            description: "Ver evaluados previos"
+          });
+        }
+
+        const sections = [
+          {
+            title: "Evaluados",
+            rows
+          }
+        ];
+
+        await updateSession(phone, { pagina_evaluados: prevPage });
+
+        const reply = {
+          type: "list",
+          text: `Selecciona a quién vas a evaluar (página ${prevPage + 1}):`,
+          buttonText: "Ver evaluados",
+          sections
+        };
+
+        if ((process.env.WHATSAPP_MODE || "sim") === "sim") {
+          return res.json(reply);
+        }
+
+        await replyToUser(phone, reply);
+        return res.sendStatus(200);
+      }
+
+      // selección real del evaluado
+      let elegido = null;
+
+      if (/^emp_\d+$/.test(t)) {
+        const noemp = t.replace("emp_", "");
+        elegido = evaluados.find(e => String(e.evaluado) === String(noemp));
+      } else if (/^\d+$/.test(t)) {
+        elegido = evaluados.find(e => String(e.evaluado) === String(t));
+      }
+
+      if (!elegido) {
+        const start = page * pageSize;
+        const end = start + pageSize;
+
+        const rows = evaluados.slice(start, end).map((e) => ({
+          id: `emp_${e.evaluado}`,
+          title: String(e.evaluado).slice(0, 24),
+          description: String(e.nombre || "").slice(0, 72)
+        }));
+
+        if (end < evaluados.length) {
+          rows.push({
+            id: "page_next",
+            title: "Siguiente",
+            description: "Ver más evaluados"
+          });
+        }
+
+        if (page > 0) {
+          rows.push({
+            id: "page_prev",
+            title: "Anterior",
+            description: "Ver evaluados previos"
+          });
+        }
+
+        const sections = [
+          {
+            title: "Evaluados",
+            rows
+          }
+        ];
+
+        const reply = {
+          type: "list",
+          text: `Selecciona un evaluado válido (página ${page + 1}):`,
+          buttonText: "Ver evaluados",
+          sections
+        };
+
+        if ((process.env.WHATSAPP_MODE || "sim") === "sim") {
+          return res.json(reply);
+        }
+
+        await replyToUser(phone, reply);
+        return res.sendStatus(200);
+      }
 
       await updateSession(phone, {
         estado: "PREGUNTA",
