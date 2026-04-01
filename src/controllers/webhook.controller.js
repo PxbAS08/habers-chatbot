@@ -875,7 +875,8 @@ exports.receiveWebhook = async (req, res) => {
 
     const fakeRes = {
       json(payload) {
-        botReply = payload;
+        console.log("fakeRes.json payload:", payload);
+        botReply = payload?.reply || null;
         return payload;
       },
       status(code) {
@@ -890,8 +891,10 @@ exports.receiveWebhook = async (req, res) => {
 
     await exports.handleWebhookSim(fakeReq, fakeRes);
 
+    console.log("botReply final:", botReply);
+
     if (botReply) {
-      await replyToUser(from, botReply);
+      await sendWhatsAppText(from, String(botReply));
     }
 
     return res.sendStatus(200);
