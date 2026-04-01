@@ -170,6 +170,19 @@ exports.handleWebhookSim = async (req, res) => {
 
     // Comandos útiles
     const t = String(text).trim();
+
+    if (
+      /^\d{3,10}$/.test(t) &&
+      session.estado !== "LOGIN" &&
+      session.evaluador_noemp &&
+      Number(t) !== Number(session.evaluador_noemp)
+    ) {
+      return res.json(msg(
+        `Ya tienes una sesión iniciada con el empleado ${session.evaluador_noemp}.\n\n` +
+        `Escribe "salir" para cerrar sesión antes de entrar con otro usuario.`
+      ));
+    }
+
     // 🔹 1) Reset manual
     if (t.toLowerCase() === "salir" || t.toLowerCase() === "reset") {
     await resetSession(phone);
