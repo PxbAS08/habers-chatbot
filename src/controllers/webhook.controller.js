@@ -320,20 +320,31 @@ exports.handleWebhookSim = async (req, res) => {
 
       if (t === "2") {
         const evaluados = await getEvaluadosByUser(session.evaluador_user);
+        const page = 0;
+        const pageSize = 8;
+
+        const inicio = page * pageSize;
+        const fin = inicio + pageSize;
 
         const lista = evaluados
-          .slice(0, 10)
+          .slice(inicio, fin)
           .map((e, i) => `${i + 1}) ${e.evaluado} - ${e.nombre}`)
           .join("\n");
 
         await updateSession(phone, {
-          estado: "HISTORIAL_EVALUADO"
+          estado: "HISTORIAL_EVALUADO",
+          pagina_historial_evaluados: 0
         });
 
-        return res.json(msg(
-          `Selecciona el evaluado para ver sus últimas 5 evaluaciones:\n\n${lista}\n\n` +
-          `Responde con un número del 1 al 10.`
-        ));
+        let texto = `Selecciona el evaluado para ver sus últimas 5 evaluaciones:\n\n${lista}\n\n`;
+
+        if (evaluados.length > pageSize) {
+          texto += `Escribe "siguiente" para ver más evaluados.\n`;
+        }
+
+        texto += `Responde con un número del 1 al ${Math.min(pageSize, evaluados.length)}.`;
+
+        return res.json(msg(texto));
       }
 
       return res.json(msg("Responde 1 o 2:\n1) Mis evaluaciones\n2) De un evaluado"));
@@ -343,11 +354,52 @@ exports.handleWebhookSim = async (req, res) => {
       console.log("Entró a HISTORIAL_EVALUADO con:", t);
 
       const evaluados = await getEvaluadosByUser(session.evaluador_user);
-      const listaReducida = evaluados.slice(0, 8);
+      const pageSize = 8;
+      let page = Number(session.pagina_historial_evaluados || 0);
+
+      if (t.toLowerCase() === "siguiente") {
+        page++;
+      }
+
+      if (t.toLowerCase() === "anterior") {
+        page = Math.max(0, page - 1);
+      }
+
+      if (t.toLowerCase() === "siguiente" || t.toLowerCase() === "anterior") {
+        const inicio = page * pageSize;
+        const fin = inicio + pageSize;
+
+        const lista = evaluados
+          .slice(inicio, fin)
+          .map((e, i) => `${i + 1}) ${e.evaluado} - ${e.nombre}`)
+          .join("\n");
+
+        await updateSession(phone, {
+          pagina_historial_evaluados: page
+        });
+
+        let texto = `Selecciona el evaluado para ver sus últimas 5 evaluaciones:\n\n${lista}\n\n`;
+
+        if (page > 0) {
+          texto += `Escribe "anterior" para regresar.\n`;
+        }
+
+        if (fin < evaluados.length) {
+          texto += `Escribe "siguiente" para ver más evaluados.\n`;
+        }
+
+        texto += `Responde con un número del 1 al ${Math.min(pageSize, evaluados.slice(inicio, fin).length)}.`;
+
+        return res.json(msg(texto));
+      }
+
+      const inicio = page * pageSize;
+      const fin = inicio + pageSize;
+      const listaReducida = evaluados.slice(inicio, fin);
       const idx = Number(t) - 1;
 
       if (Number.isNaN(idx) || idx < 0 || idx >= listaReducida.length) {
-        return res.json(msg("Selecciona un número válido del 1 al 8."));
+        return res.json(msg("Selecciona un número válido, o escribe siguiente/anterior."));
       }
 
       const elegido = listaReducida[idx];
@@ -356,7 +408,8 @@ exports.handleWebhookSim = async (req, res) => {
 
       await updateSession(phone, {
         historial_ids_json: JSON.stringify(ids),
-        estado: "TIPO"
+        estado: "TIPO",
+        pagina_historial_evaluados: 0
       });
 
       const historialTexto = formatHistorial(rows).slice(0, 700);
