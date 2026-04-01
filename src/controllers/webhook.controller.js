@@ -669,9 +669,9 @@ exports.handleWebhookSim = async (req, res) => {
         type: "buttons",
         text: `Evaluando a: ${elegido.nombre}\n\nPregunta 1/18:\n${PREGUNTAS[0]}`,
         buttons: [
-          { id: "resp_1", title: "Bajo" },
-          { id: "resp_2", title: "Medio" },
-          { id: "resp_3", title: "Alto" }
+          { id: "resp_1_1", title: "Bajo" },
+          { id: "resp_1_2", title: "Medio" },
+          { id: "resp_1_3", title: "Alto" }
         ]
       };
 
@@ -687,18 +687,32 @@ exports.handleWebhookSim = async (req, res) => {
       const q = Number(session.pregunta_actual);
 
       let val = null;
-      if (t === "1" || t === "resp_1") val = 1;
-      if (t === "2" || t === "resp_2") val = 2;
-      if (t === "3" || t === "resp_3") val = 3;
+        let preguntaRespondida = null;
+
+        if (/^resp_\d+_[123]$/.test(t)) {
+          const partes = t.split("_");
+          preguntaRespondida = Number(partes[1]);
+          val = Number(partes[2]);
+        } else if (t === "1" || t === "2" || t === "3") {
+          // opcional: permitir texto/manual
+          preguntaRespondida = q;
+          val = Number(t);
+        }
+
+        if (preguntaRespondida !== q) {
+          return res.json(msg(
+            `Esa respuesta ya no corresponde a la pregunta actual.\n\nPregunta ${q}/18:\n${PREGUNTAS[q - 1]}\n\nResponde: 1=Bajo, 2=Medio, 3=Alto`
+          ));
+        }
 
       if (![1, 2, 3].includes(val)) {
         const reply = {
           type: "buttons",
           text: `Pregunta ${q}/18:\n${PREGUNTAS[q - 1]}`,
           buttons: [
-            { id: "resp_1", title: "Bajo" },
-            { id: "resp_2", title: "Medio" },
-            { id: "resp_3", title: "Alto" }
+            { id: `resp_${q}_1`, title: "Bajo" },
+            { id: `resp_${q}_2`, title: "Medio" },
+            { id: `resp_${q}_3`, title: "Alto" }
           ]
         };
 
@@ -729,9 +743,9 @@ exports.handleWebhookSim = async (req, res) => {
           type: "buttons",
           text: `Pregunta ${nextQ}/18:\n${PREGUNTAS[nextQ - 1]}`,
           buttons: [
-            { id: "resp_1", title: "Bajo" },
-            { id: "resp_2", title: "Medio" },
-            { id: "resp_3", title: "Alto" }
+            { id: `resp_${nextQ}_1`, title: "Bajo" },
+            { id: `resp_${nextQ}_2`, title: "Medio" },
+            { id: `resp_${nextQ}_3`, title: "Alto" }
           ]
         };
 
@@ -798,6 +812,16 @@ exports.handleWebhookSim = async (req, res) => {
     if (session.estado === "RESUMEN") {
       const guardar = (t === "1" || t === "guardar_eval");
       const cancelar = (t === "2" || t === "cancelar_eval");
+
+      const respuestasGuard = JSON.parse(session.respuestas_json || "{}");
+      const totalRespondidas = Object.keys(respuestasObj).length;
+
+      if (totalRespondidas < 18) {
+        return res.json(msg(
+          `Aún faltan preguntas por responder.\n\n` +
+          `Respondidas: ${totalRespondidas}/18`
+        ));
+      }
 
       if (cancelar) {
         await resetSession(phone);
