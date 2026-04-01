@@ -178,15 +178,24 @@ exports.handleWebhookSim = async (req, res) => {
 
     // Comando historial (funciona en cualquier momento)
     if (t.toLowerCase() === "historial") {
-    // si no ha hecho login todavía, pedimos noemp
-    if (!session.evaluador_user) {
-        return res.json(msg("Primero inicia sesión.\nEscribe tu *número de empleado*."));
-    }
+      console.log("Entró a comando historial. Session actual:", {
+        estado: session.estado,
+        evaluador_user: session.evaluador_user,
+        evaluador_noemp: session.evaluador_noemp
+      });
 
-    await updateSession(phone, { estado: "HISTORIAL_MENU" });
-    return res.json(msg(
+      if (!session.evaluador_user) {
+        console.log("Historial sin login válido");
+        return res.json(msg("Primero inicia sesión.\nEscribe tu número de empleado."));
+      }
+
+      await updateSession(phone, { estado: "HISTORIAL_MENU" });
+
+      console.log("Historial cambió estado a HISTORIAL_MENU");
+
+      return res.json(msg(
         "Historial (últimas 5):\n1) Mis evaluaciones (como evaluador)\n2) De un evaluado (seleccionar)\n\nResponde 1 o 2."
-    ));
+      ));
     }
 
     // ✅ Comando: detalle N (usa el último historial mostrado)
@@ -804,7 +813,7 @@ exports.handleWebhookSim = async (req, res) => {
     await resetSession(phone);
     return res.json(msg("Sesión reiniciada. Escribe tu *número de empleado* para iniciar."));
   } catch (err) {
-    console.error(err);
+    console.error("ERORR en handleWebhookSim:", err);
     return res.status(500).json({ ok: false, error: err.message });
   }
 };
@@ -888,6 +897,11 @@ exports.receiveWebhook = async (req, res) => {
     return res.sendStatus(200);
   } catch (error) {
     console.error("Error en receiveWebhook:", error);
+    try {
+      if (req?.body) {
+        console.error("BODY RECIBIDO:", JSON.stringify(req.body, null, 2));
+      }
+    } catch (_) {}
     return res.sendStatus(500);
   }
 };
