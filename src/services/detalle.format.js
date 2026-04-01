@@ -21,6 +21,20 @@ function countBMA(respuestas) {
   return { bajo, medio, alto };
 }
 
+function formatearFecha(fecha) {
+  if (!fecha) return "Sin fecha";
+
+  const d = new Date(fecha);
+
+  if (isNaN(d.getTime())) return String(fecha);
+
+  const dia = String(d.getDate()).padStart(2, "0");
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const anio = d.getFullYear();
+
+  return `${dia}/${mes}/${anio}`;
+}
+
 function formatDetalle(row) {
   // respuestas 1..18
   const res = Array.from({ length: 18 }, (_, i) => safeNum(row[`re${i + 1}`]));
@@ -57,7 +71,7 @@ function formatDetalle(row) {
 
   return (
         `📄 *Detalle evaluación*\n` +
-        `ID: ${row.id} | Fecha: ${row.fecha}\n` +
+        `ID: ${row.id} | Fecha: ${formatearFecha(row.fecha)}\n` +
         `Tipo: ${tipoEval} | Periodo: ${periodo}\n\n` +
 
         `👤 *Evaluado:* ${evalName}${evalPuesto}${evalArea}\n\n` +

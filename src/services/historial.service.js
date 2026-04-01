@@ -59,6 +59,20 @@ async function getHistorialByEvaluadoNoemp(evaluadoNoemp, limit = 5) {
   return rows;
 }
 
+function formatearFecha(fecha) {
+  if (!fecha) return "Sin fecha";
+
+  const d = new Date(fecha);
+
+  if (isNaN(d.getTime())) return String(fecha);
+
+  const dia = String(d.getDate()).padStart(2, "0");
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const anio = d.getFullYear();
+
+  return `${dia}/${mes}/${anio}`;
+}
+
 function formatHistorial(rows) {
   if (!rows || rows.length === 0) return "No hay evaluaciones para mostrar.";
 
@@ -68,7 +82,7 @@ function formatHistorial(rows) {
     const evrName = r.evaluador_nombre ? `${r.evaluador_nombre}` : `${r.user || ""}`.trim();
 
     return [
-      `${i + 1}) ID ${r.id} | ${r.fecha} | ${r.tipo_eval} | ${r.periodo}-${r.anio}`,
+      `${i + 1}) ID ${r.id} | ${formatearFecha(r.fecha)} | ${r.tipo_eval} | ${r.periodo}-${r.anio}`,
       `   Evaluado: ${evalName}${evalPuesto}`,
       `   Evaluador: ${evrName}`,
       `   Promedio: ${r.promedio}`
@@ -148,7 +162,7 @@ function formatDetalle(det) {
   const head =
 `🧾 Detalle de Evaluación
 ID: ${det.id}
-Fecha: ${det.fecha}
+Fecha: ${formatearFecha(det.fecha)}
 Periodo: ${det.periodo}-${det.anio}
 Tipo: ${det.tipo_eval}
 
