@@ -289,6 +289,8 @@ exports.handleWebhookSim = async (req, res) => {
     }
 
     if (session.estado === "HISTORIAL_MENU") {
+      console.log("Entró a HISTORIAL_MENU con:", t);
+
       if (t === "1") {
         const rows = await getHistorialByEvaluadorUser(session.evaluador_user, 5);
         const ids = rows.map(r => r.id);
@@ -298,24 +300,30 @@ exports.handleWebhookSim = async (req, res) => {
           estado: "TIPO"
         });
 
+        const historialTexto = formatHistorial(rows).slice(0, 700);
+
         return res.json(msg(
-          `📌 Mis últimas 5 evaluaciones:\n\n${formatHistorial(rows)}\n\n` +
-          `Escribe: *detalle 1* (o *detalle 2*, etc.)\n\n` +
-          `Puedes escribir "historial" otra vez o continuar.\n` +
-          `Tipo evaluación:\n1) NORMAL\n2) EXTRA`
+          `Mis últimas 5 evaluaciones:\n\n${historialTexto}\n\n` +
+          `Escribe: detalle 1, detalle 2, ... detalle 5.\n\n` +
+          `También puedes escribir tu número de empleado para iniciar otra vez.`
         ));
       }
 
       if (t === "2") {
         const evaluados = await getEvaluadosByUser(session.evaluador_user);
+
         const lista = evaluados
-          .map((e, i) => `${i + 1}) ${e.evaluado} - ${e.nombre} (${e.puesto})`)
+          .slice(0, 10)
+          .map((e, i) => `${i + 1}) ${e.evaluado} - ${e.nombre}`)
           .join("\n");
 
-        await updateSession(phone, { estado: "HISTORIAL_EVALUADO" });
+        await updateSession(phone, {
+          estado: "HISTORIAL_EVALUADO"
+        });
 
         return res.json(msg(
-          `Selecciona el evaluado para ver sus últimas 5 evaluaciones:\n${lista}\n\nResponde con el número.`
+          `Selecciona el evaluado para ver sus últimas 5 evaluaciones:\n\n${lista}\n\n` +
+          `Responde con un número del 1 al 10.`
         ));
       }
 
@@ -323,14 +331,17 @@ exports.handleWebhookSim = async (req, res) => {
     }
 
     if (session.estado === "HISTORIAL_EVALUADO") {
+      console.log("Entró a HISTORIAL_EVALUADO con:", t);
+
       const evaluados = await getEvaluadosByUser(session.evaluador_user);
+      const listaReducida = evaluados.slice(0, 10);
       const idx = Number(t) - 1;
 
-      if (Number.isNaN(idx) || idx < 0 || idx >= evaluados.length) {
-        return res.json(msg("Selecciona un número válido de la lista."));
+      if (Number.isNaN(idx) || idx < 0 || idx >= listaReducida.length) {
+        return res.json(msg("Selecciona un número válido del 1 al 10."));
       }
 
-      const elegido = evaluados[idx];
+      const elegido = listaReducida[idx];
       const rows = await getHistorialByEvaluadoNoemp(elegido.evaluado, 5);
       const ids = rows.map(r => r.id);
 
@@ -339,12 +350,13 @@ exports.handleWebhookSim = async (req, res) => {
         estado: "TIPO"
       });
 
+      const historialTexto = formatHistorial(rows).slice(0, 700);
+
       return res.json(msg(
-        `📌 Últimas 5 evaluaciones de:\n${elegido.evaluado} - ${elegido.nombre}\n\n` +
-        `${formatHistorial(rows)}\n\n` +
-        `Escribe: *detalle 1* (o *detalle 2*, etc.)\n\n` +
-        `Puedes escribir "historial" otra vez o continuar.\n` +
-        `Tipo evaluación:\n1) NORMAL\n2) EXTRA`
+        `Últimas 5 evaluaciones de:\n${elegido.evaluado} - ${elegido.nombre}\n\n` +
+        `${historialTexto}\n\n` +
+        `Escribe: detalle 1, detalle 2, ... detalle 5.\n\n` +
+        `También puedes escribir tu número de empleado para iniciar otra vez.`
       ));
     }
 
