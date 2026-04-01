@@ -104,7 +104,7 @@ async function replyToUser(phone, reply) {
   return null;
 }
 
-function buildEvaluadosList(evaluados, page = 0, pageSize = 9) {
+function buildEvaluadosList(evaluados, page = 0, pageSize = 8) {
   const total = evaluados.length;
   const start = page * pageSize;
   const end = start + pageSize;
@@ -334,11 +334,11 @@ exports.handleWebhookSim = async (req, res) => {
       console.log("Entró a HISTORIAL_EVALUADO con:", t);
 
       const evaluados = await getEvaluadosByUser(session.evaluador_user);
-      const listaReducida = evaluados.slice(0, 10);
+      const listaReducida = evaluados.slice(0, 8);
       const idx = Number(t) - 1;
 
       if (Number.isNaN(idx) || idx < 0 || idx >= listaReducida.length) {
-        return res.json(msg("Selecciona un número válido del 1 al 10."));
+        return res.json(msg("Selecciona un número válido del 1 al 8."));
       }
 
       const elegido = listaReducida[idx];
@@ -386,7 +386,7 @@ exports.handleWebhookSim = async (req, res) => {
 
       const evaluados = await getEvaluadosByUser(session.evaluador_user);
 
-      const rows = evaluados.slice(0, 9).map((e) => ({
+      const rows = evaluados.slice(0, 8).map((e) => ({
         id: `emp_${e.evaluado}`,
         title: String(e.evaluado).slice(0, 24),
         description: String(e.nombre || "").slice(0, 72)
@@ -431,7 +431,7 @@ exports.handleWebhookSim = async (req, res) => {
     if (session.estado === "EVALUADO") {
       const evaluados = await getEvaluadosByUser(session.evaluador_user);
       const page = Number(session.pagina_evaluados || 0);
-      const pageSize = 9;
+      const pageSize = 8;
 
       // navegación
       if (t === "page_next") {
