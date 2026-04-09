@@ -826,8 +826,12 @@ exports.handleWebhookSim = async (req, res) => {
       const guardar = (t === "1" || t === "guardar_eval");
       const cancelar = (t === "2" || t === "cancelar_eval");
 
-      const respuestasGuard = JSON.parse(session.respuestas_json || "{}");
-      const totalRespondidas = Object.keys(respuestasObj).length;
+      const respuestasGuard =
+        typeof session.respuestas_json === "string"
+          ? JSON.parse(session.respuestas_json || "{}")
+          : (session.respuestas_json || {});
+
+      const totalRespondidas = Object.keys(respuestasGuard).length;
 
       if (totalRespondidas < 18) {
         return res.json(msg(
