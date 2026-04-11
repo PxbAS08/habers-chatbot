@@ -65,6 +65,11 @@ async function getEvaluaciones(params = {}) {
       r.tipo_eval,
       r.evaluado,
       r.user AS evaluador_user,
+      
+      r.re1, r.re2, r.re3, r.re4, r.re5, r.re6, 
+      r.re7, r.re8, r.re9, r.re10, r.re11, r.re12, 
+      r.re13, r.re14, r.re15, r.re16, r.re17, r.re18,
+      
       ${PROM_EXPR} AS promedio,
       r.re19 AS comentario,
 

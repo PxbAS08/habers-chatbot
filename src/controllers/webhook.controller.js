@@ -673,6 +673,8 @@ exports.handleWebhookSim = async (req, res) => {
       await updateSession(phone, {
         estado: "PREGUNTA",
         evaluado_noemp: elegido.evaluado,
+        evaluado_nombre: elegido.nombre,
+        evaluado_puesto: elegido.puesto || "",
         tipo: elegido.tipo,
         pregunta_actual: 1,
         respuestas_json: {},
