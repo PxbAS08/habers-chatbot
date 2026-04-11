@@ -14,6 +14,7 @@ function requireAuth(req, res, next) {
 
 router.get("/", requireAuth, viewReportes);
 router.get("/excel", requireAuth, exportExcel);
+router.get("/excel-graficas", requireAuth, exportExcelGraficas);
 router.get("/detalle/:id", requireAuth, viewDetalle);
 
 module.exports = router;

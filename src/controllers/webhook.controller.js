@@ -271,14 +271,15 @@ exports.handleWebhookSim = async (req, res) => {
     
     // Flujo por estados
     if (session.estado === "LOGIN") {
-      const noemp = Number(t);
-      if (!noemp || Number.isNaN(noemp)) {
-        return res.json(msg("Por favor escribe tu *número de empleado* (solo números)."));
-      }
+      const noemp = String(t).trim().toLowerCase();
+
+        if (!/^[a-zA-Z0-9]+$/.test(noemp)) {
+          return res.json(msg("Por favor escribe tu *número de empleado o usuario*."));
+        }
 
       const user = await loginByNoemp(noemp);
       if (!user) {
-        return res.json(msg("No. empleado no encontrado. Intenta de nuevo."));
+        return res.json(msg("No. empleado o usuario no encontrado. Intenta de nuevo."));
       }
 
       // (mínimo de seguridad) validar que tenga evaluados asignados
@@ -776,7 +777,7 @@ exports.handleWebhookSim = async (req, res) => {
 
         const reply = {
           type: "text",
-          text: "Listo ✅\nEscribe tu comentario o escribe 0 para omitir."
+          text: `Listo ✅\nEscribe tu comentario para "${session.evaluado_nombre}" o escribe 0 para omitir.`
         };
 
         if ((process.env.WHATSAPP_MODE || "sim") === "sim") {
@@ -807,7 +808,7 @@ exports.handleWebhookSim = async (req, res) => {
       const reply = {
         type: "buttons",
         text:
-          `Resumen:\n${resumen}\n\n¿Guardar evaluación?`,
+          `Resumen de evaluación para: ${session.evaluado_nombre}:\n${resumen}\n\n¿Guardar evaluación?`,
         buttons: [
           { id: "guardar_eval", title: "Guardar" },
           { id: "cancelar_eval", title: "Cancelar" }

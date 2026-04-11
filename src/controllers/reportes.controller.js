@@ -186,6 +186,9 @@ exports.viewReportes = async (req, res) => {
               <a href="/reportes/excel?periodo=${encodeURIComponent(filtros.periodo)}&anio=${encodeURIComponent(filtros.anio)}&tipo_eval=${encodeURIComponent(filtros.tipo_eval)}&busqueda=${encodeURIComponent(filtros.busqueda)}&evaluador=${encodeURIComponent(filtros.evaluador)}&area=${encodeURIComponent(filtros.area)}&puesto=${encodeURIComponent(filtros.puesto)}">
                 Exportar Excel
               </a>
+              <a href="/reportes/excel-graficas?periodo=${encodeURIComponent(filtros.periodo)}&anio=${encodeURIComponent(filtros.anio)}&tipo_eval=${encodeURIComponent(filtros.tipo_eval)}&busqueda=${encodeURIComponent(filtros.busqueda)}&evaluador=${encodeURIComponent(filtros.evaluador)}&area=${encodeURIComponent(filtros.area)}&puesto=${encodeURIComponent(filtros.puesto)}" style="background: #10b981;">
+                Excel Gráficas
+              </a>
               <a href="/logout">Cerrar sesión</a>
             </div>
           </div>
@@ -362,6 +365,75 @@ exports.exportExcel = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).send("Error exportando Excel");
+  }
+};
+
+exports.exportExcelGraficas = async (req, res) => {
+  try {
+    const filtros = {
+      periodo: req.query.periodo || "",
+      anio: req.query.anio || "",
+      tipo_eval: req.query.tipo_eval || "",
+      busqueda: req.query.busqueda || "",
+      evaluador: req.query.evaluador || "",
+      area: req.query.area || "",
+      puesto: req.query.puesto || "",
+    };
+
+    const rows = await getEvaluaciones(filtros);
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Datos Gráficas");
+
+    worksheet.columns = [
+      { header: "ID", key: "id", width: 10 },
+      { header: "Tipo Eval", key: "tipo_eval", width: 12 },
+      { header: "No. Evaluado", key: "evaluado", width: 15 },
+      { header: "Evaluado", key: "evaluado_nombre", width: 25 },
+      { header: "Evaluador", key: "evaluador_nombre", width: 25 },
+      { header: "P1", key: "re1", width: 8 },
+      { header: "P2", key: "re2", width: 8 },
+      { header: "P3", key: "re3", width: 8 },
+      { header: "P4", key: "re4", width: 8 },
+      { header: "P5", key: "re5", width: 8 },
+      { header: "P6", key: "re6", width: 8 },
+      { header: "P7", key: "re7", width: 8 },
+      { header: "P8", key: "re8", width: 8 },
+      { header: "P9", key: "re9", width: 8 },
+      { header: "P10", key: "re10", width: 8 },
+      { header: "P11", key: "re11", width: 8 },
+      { header: "P12", key: "re12", width: 8 },
+      { header: "P13", key: "re13", width: 8 },
+      { header: "P14", key: "re14", width: 8 },
+      { header: "P15", key: "re15", width: 8 },
+      { header: "P16", key: "re16", width: 8 },
+      { header: "P17", key: "re17", width: 8 },
+      { header: "P18", key: "re18", width: 8 }
+    ];
+
+    rows.forEach((r) => {
+      worksheet.addRow({
+        id: r.id,
+        tipo_eval: r.tipo_eval,
+        evaluado: r.evaluado,
+        evaluado_nombre: r.evaluado_nombre || "",
+        evaluador_nombre: r.evaluador_nombre || r.evaluador_user || "",
+        re1: r.re1, re2: r.re2, re3: r.re3, re4: r.re4, re5: r.re5, re6: r.re6,
+        re7: r.re7, re8: r.re8, re9: r.re9, re10: r.re10, re11: r.re11, re12: r.re12,
+        re13: r.re13, re14: r.re14, re15: r.re15, re16: r.re16, re17: r.re17, re18: r.re18
+      });
+    });
+
+    worksheet.getRow(1).font = { bold: true };
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", 'attachment; filename="datos_graficas_rh.xlsx"');
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Error exportando Excel de gráficas");
   }
 };
 
