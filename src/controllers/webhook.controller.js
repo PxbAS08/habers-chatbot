@@ -928,43 +928,84 @@ exports.verifyWebhook = (req, res) => {
   return res.sendStatus(403);
 };
 
+const processedMessageIds = new Map();
+
+function cleanupProcessedMessages() {
+  const now = Date.now();
+  const ttl = 10 * 60 * 1000; // 10 minutos
+
+  for (const [id, ts] of processedMessageIds.entries()) {
+    if (now - ts > ttl) {
+      processedMessageIds.delete(id);
+    }
+  }
+}
+
 exports.receiveWebhook = async (req, res) => {
   try {
+    cleanupProcessedMessages();
+
     const body = req.body;
 
     const entry = body.entry?.[0];
     const changes = entry?.changes?.[0];
-    const value = changes?.value;
+    const value = changes?.value || {};
 
-    if (!value || !value.messages || !Array.isArray(value.messages)) {
+    // Ignorar cualquier cosa que no sea evento de mensajes
+    if (changes?.field !== "messages") {
+      return res.sendStatus(200);
+    }
+
+    // Ignorar estados de enviado, entregado, leído, etc.
+    if (value.statuses?.length && !value.messages?.length) {
+      return res.sendStatus(200);
+    }
+
+    if (!value.messages || !Array.isArray(value.messages) || value.messages.length === 0) {
       return res.sendStatus(200);
     }
 
     const msgData = value.messages[0];
     const from = msgData.from;
+    const messageId = msgData.id;
+
+    // Evitar procesar dos veces el mismo mensaje
+    if (messageId && processedMessageIds.has(messageId)) {
+      return res.sendStatus(200);
+    }
+
     let text = "";
 
     if (msgData.type === "text") {
-      text = msgData.text?.body || "";
-    }
-
-    if (msgData.type === "interactive") {
+      text = msgData.text?.body?.trim() || "";
+    } else if (msgData.type === "interactive") {
       if (msgData.interactive?.button_reply?.id) {
         text = msgData.interactive.button_reply.id;
       } else if (msgData.interactive?.list_reply?.id) {
         text = msgData.interactive.list_reply.id;
+      } else if (msgData.interactive?.button_reply?.title) {
+        text = msgData.interactive.button_reply.title;
+      } else if (msgData.interactive?.list_reply?.title) {
+        text = msgData.interactive.list_reply.title;
       }
+    } else {
+      // Ignorar otros tipos de mensaje
+      return res.sendStatus(200);
     }
 
     if (!from || !text) {
       return res.sendStatus(200);
     }
 
-    // Reutilizamos la lógica del bot simulando request interno
+    // Marcar este mensaje como procesado
+    if (messageId) {
+      processedMessageIds.set(messageId, Date.now());
+    }
+
     const fakeReq = {
       body: {
         phone: from,
-        text: text
+        text
       }
     };
 

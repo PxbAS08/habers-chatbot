@@ -466,7 +466,10 @@ exports.viewDetalle = async (req, res) => {
       "Asistencia y Puntualidad": respuestas.slice(15, 18),
     };
 
-    const promedioGeneral = avg(respuestas);
+    const promedioCrudo = respuestas.length ? (respuestas.reduce((a, b) => a + b, 0) / respuestas.length) : 0;
+    const promedioRedondeado = Math.round(promedioCrudo);
+    const nivel = promedioRedondeado >= 3 ? "Alto" : (promedioRedondeado === 2 ? "Medio" : "Bajo");
+    const promedioGeneral = `${promedioRedondeado} = ${nivel}`;
 
     const conteo = {
       bajo: respuestas.filter(r => r === 1).length,
