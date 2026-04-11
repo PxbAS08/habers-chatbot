@@ -385,13 +385,14 @@ exports.exportExcelGraficas = async (req, res) => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Datos Gráficas");
 
-    // Agregamos Fecha al inicio y Comentario al final
+    // Agregamos "No. Evaluador" a la lista de columnas
     worksheet.columns = [
       { header: "ID", key: "id", width: 10 },
       { header: "Fecha", key: "fecha", width: 15 },
       { header: "Tipo Eval", key: "tipo_eval", width: 12 },
       { header: "No. Evaluado", key: "evaluado", width: 15 },
       { header: "Evaluado", key: "evaluado_nombre", width: 25 },
+      { header: "No. Evaluador", key: "evaluador_user", width: 15 },
       { header: "Evaluador", key: "evaluador_nombre", width: 25 },
       { header: "P1", key: "re1", width: 8 },
       { header: "P2", key: "re2", width: 8 },
@@ -414,6 +415,7 @@ exports.exportExcelGraficas = async (req, res) => {
       { header: "Comentario", key: "comentario", width: 40 }
     ];
 
+    // Mapeamos el dato evaluador_user en cada fila
     rows.forEach((r) => {
       worksheet.addRow({
         id: r.id,
@@ -421,6 +423,7 @@ exports.exportExcelGraficas = async (req, res) => {
         tipo_eval: r.tipo_eval,
         evaluado: r.evaluado,
         evaluado_nombre: r.evaluado_nombre || "",
+        evaluador_user: r.evaluador_user || "",
         evaluador_nombre: r.evaluador_nombre || r.evaluador_user || "",
         re1: r.re1, re2: r.re2, re3: r.re3, re4: r.re4, re5: r.re5, re6: r.re6,
         re7: r.re7, re8: r.re8, re9: r.re9, re10: r.re10, re11: r.re11, re12: r.re12,
