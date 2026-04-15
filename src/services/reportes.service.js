@@ -30,7 +30,7 @@ async function getEvaluaciones(params = {}) {
 
   if (busqueda) {
     where.push(`(
-      CAST(r.evaluado AS CHAR) LIKE ?
+      COALESCE(r.evaluado, '') LIKE ?
       OR COALESCE(ue.Nombre, ev.nombre, '') LIKE ?
     )`);
     values.push(`%${busqueda}%`, `%${busqueda}%`);
@@ -45,7 +45,7 @@ async function getEvaluaciones(params = {}) {
   }
 
   if (area) {
-    where.push(`COALESCE(ue.Area, '') LIKE ?`);
+    where.push(`COALESCE(ue.Area, ev.area, '') LIKE ?`);
     values.push(`%${area}%`);
   }
 
@@ -75,7 +75,7 @@ async function getEvaluaciones(params = {}) {
 
       COALESCE(ue.Nombre, ev.nombre) AS evaluado_nombre,
       COALESCE(ue.Puesto, ev.puesto) AS evaluado_puesto,
-      COALESCE(ue.Area, '') AS evaluado_area,
+      COALESCE(ue.Area, ev.area, '') AS evaluado_area,
 
       uu.Nombre AS evaluador_nombre,
       uu.Puesto AS evaluador_puesto,
@@ -83,7 +83,7 @@ async function getEvaluaciones(params = {}) {
 
     FROM resultadosdesempeno r
     LEFT JOIN users ue
-      ON ue.Noemp = r.evaluado
+      ON CAST(ue.Noemp AS CHAR) = r.evaluado
     LEFT JOIN evaluados ev
       ON ev.evaluado = r.evaluado AND ev.user = r.user
     LEFT JOIN users uu
@@ -103,8 +103,8 @@ async function getEvaluacionDetalle(id) {
         r.*,
 
         COALESCE(ue.Nombre, ev.nombre) AS evaluado_nombre,
-        COALESCE(ue.Puesto, ev.puesto) AS evaluado_puesto,
-        COALESCE(ue.Area, '') AS evaluado_area,
+      COALESCE(ue.Puesto, ev.puesto) AS evaluado_puesto,
+      COALESCE(ue.Area, ev.area, '') AS evaluado_area,
 
         uu.Nombre AS evaluador_nombre,
         uu.Puesto AS evaluador_puesto,
@@ -112,7 +112,7 @@ async function getEvaluacionDetalle(id) {
 
     FROM resultadosdesempeno r
     LEFT JOIN users ue
-        ON ue.Noemp = r.evaluado
+        ON CAST(ue.Noemp AS CHAR) = r.evaluado
     LEFT JOIN evaluados ev
         ON ev.evaluado = r.evaluado AND ev.user = r.user
     LEFT JOIN users uu

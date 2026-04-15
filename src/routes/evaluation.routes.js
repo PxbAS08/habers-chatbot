@@ -35,8 +35,14 @@ router.post("/login", async (req, res) => {
 router.get("/evaluados/:user", async (req, res) => {
   try {
     const { user } = req.params;
+    const extraoficial =
+      req.query.extraoficial === "1"
+        ? true
+        : req.query.extraoficial === "0"
+          ? false
+          : null;
 
-    const evaluados = await getEvaluadosByUser(user);
+    const evaluados = await getEvaluadosByUser(user, { extraoficial });
 
     res.json({ ok: true, count: evaluados.length, evaluados });
   } catch (error) {

@@ -1,18 +1,31 @@
 const db = require("../config/database");
 
-async function loginByNoemp(noemp) {
-  const [rows] = await db.query(
-    "SELECT user, Noemp, Nombre, Puesto, Area FROM users WHERE user = ? LIMIT 1",
-    [noemp]
-  );
+function cleanLoginValue(value) {
+  return String(value || "").trim();
+}
 
-  if (rows.length === 0) {
+async function loginByNoemp(noemp) {
+  const login = cleanLoginValue(noemp);
+
+  if (!login) {
     return null;
   }
 
-  return rows[0];
+  const [rows] = await db.query(
+    `SELECT user, Noemp, Nombre, Puesto, Area, COALESCE(activo, 1) AS activo
+     FROM users
+     WHERE COALESCE(activo, 1) = 1
+       AND (
+         LOWER(user) = LOWER(?)
+         OR CAST(Noemp AS CHAR) = ?
+       )
+     LIMIT 1`,
+    [login, login]
+  );
+
+  return rows[0] || null;
 }
 
 module.exports = {
-  loginByNoemp
+  loginByNoemp,
 };

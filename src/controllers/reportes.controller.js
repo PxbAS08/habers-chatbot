@@ -32,7 +32,7 @@ exports.viewReportes = async (req, res) => {
         <td>${escapeHtml(r.tipo_eval)}</td>
         <td>
           <strong>${escapeHtml(r.evaluado_nombre || "Sin nombre")}</strong><br>
-          <span class="small">No. Emp: ${escapeHtml(r.evaluado)}</span>
+          <span class="small">ID: ${escapeHtml(r.evaluado)}</span>
         </td>
         <td>${escapeHtml(r.evaluado_puesto || "")}</td>
         <td>${escapeHtml(r.evaluado_area || "")}</td>
@@ -183,6 +183,12 @@ exports.viewReportes = async (req, res) => {
           <div class="topbar">
             <h1>Reporte de Evaluaciones RH</h1>
             <div class="actions">
+              <a href="/reportes/evaluadores">
+                Evaluadores
+              </a>
+              <a href="/reportes/evaluados">
+                Evaluados
+              </a>
               <a href="/reportes/excel?periodo=${encodeURIComponent(filtros.periodo)}&anio=${encodeURIComponent(filtros.anio)}&tipo_eval=${encodeURIComponent(filtros.tipo_eval)}&busqueda=${encodeURIComponent(filtros.busqueda)}&evaluador=${encodeURIComponent(filtros.evaluador)}&area=${encodeURIComponent(filtros.area)}&puesto=${encodeURIComponent(filtros.puesto)}">
                 Exportar Excel
               </a>
@@ -213,7 +219,7 @@ exports.viewReportes = async (req, res) => {
               <option value="EXTRA" ${filtros.tipo_eval === "EXTRA" ? "selected" : ""}>EXTRA</option>
             </select>
 
-            <input type="text" name="busqueda" class="auto-submit" placeholder="No. empleado o nombre" value="${escapeHtml(filtros.busqueda)}" />
+            <input type="text" name="busqueda" class="auto-submit" placeholder="Identificador o nombre" value="${escapeHtml(filtros.busqueda)}" />
 
             <input type="text" name="evaluador" class="auto-submit" placeholder="Evaluador" value="${escapeHtml(filtros.evaluador)}" />
 

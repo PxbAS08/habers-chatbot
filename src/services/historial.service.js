@@ -19,11 +19,12 @@ async function getHistorialByEvaluadorUser(evaluadorUser, limit = 5) {
       r.anio,
       r.evaluado,
       ${PROM_EXPR} AS promedio,
-      ue.Nombre AS evaluado_nombre,
-      ue.Puesto AS evaluado_puesto,
+      COALESCE(ue.Nombre, ev.nombre) AS evaluado_nombre,
+      COALESCE(ue.Puesto, ev.puesto) AS evaluado_puesto,
       uu.Nombre AS evaluador_nombre
     FROM resultadosdesempeno r
-    LEFT JOIN users ue ON ue.Noemp = r.evaluado
+    LEFT JOIN users ue ON CAST(ue.Noemp AS CHAR) = r.evaluado
+    LEFT JOIN evaluados ev ON ev.evaluado = r.evaluado AND ev.user = r.user
     LEFT JOIN users uu ON uu.user = r.user
     WHERE r.user = ?
     ORDER BY r.id DESC
@@ -42,20 +43,22 @@ async function getHistorialByEvaluadoNoemp(evaluadoNoemp, limit = 5) {
       r.tipo_eval,
       r.periodo,
       r.anio,
+      r.evaluado,
       r.user,
       ${PROM_EXPR} AS promedio,
-      ue.Nombre AS evaluado_nombre,
-      ue.Puesto AS evaluado_puesto,
+      COALESCE(ue.Nombre, ev.nombre) AS evaluado_nombre,
+      COALESCE(ue.Puesto, ev.puesto) AS evaluado_puesto,
       uu.Nombre AS evaluador_nombre
     FROM resultadosdesempeno r
-    LEFT JOIN users ue ON ue.Noemp = r.evaluado
+    LEFT JOIN users ue ON CAST(ue.Noemp AS CHAR) = r.evaluado
+    LEFT JOIN evaluados ev ON ev.evaluado = r.evaluado AND ev.user = r.user
     LEFT JOIN users uu ON uu.user = r.user
     WHERE r.evaluado = ?
     ORDER BY r.id DESC
     LIMIT ?
   `;
 
-  const [rows] = await db.query(sql, [Number(evaluadoNoemp), Number(limit)]);
+  const [rows] = await db.query(sql, [String(evaluadoNoemp), Number(limit)]);
   return rows;
 }
 
@@ -77,7 +80,7 @@ function formatHistorial(rows) {
   if (!rows || rows.length === 0) return "No hay evaluaciones para mostrar.";
 
   return rows.map((r, i) => {
-    const evalName = r.evaluado_nombre ? `${r.evaluado_nombre}` : `Noemp ${r.evaluado}`;
+    const evalName = r.evaluado_nombre ? `${r.evaluado_nombre}` : `${r.evaluado}`;
     const evalPuesto = r.evaluado_puesto ? ` (${r.evaluado_puesto})` : "";
     const evrName = r.evaluador_nombre ? `${r.evaluador_nombre}` : `${r.user || ""}`.trim();
 
@@ -94,12 +97,13 @@ async function getEvaluacionDetalleById(evaluadorUser, id) {
   const sql = `
     SELECT
       r.*,
-      ue.Nombre AS evaluado_nombre,
-      ue.Puesto AS evaluado_puesto,
-      ue.Area   AS evaluado_area,
+      COALESCE(ue.Nombre, ev.nombre) AS evaluado_nombre,
+      COALESCE(ue.Puesto, ev.puesto) AS evaluado_puesto,
+      COALESCE(ue.Area, ev.area, '') AS evaluado_area,
       uu.Nombre AS evaluador_nombre
     FROM resultadosdesempeno r
-    LEFT JOIN users ue ON ue.Noemp = r.evaluado
+    LEFT JOIN users ue ON CAST(ue.Noemp AS CHAR) = r.evaluado
+    LEFT JOIN evaluados ev ON ev.evaluado = r.evaluado AND ev.user = r.user
     LEFT JOIN users uu ON uu.user = r.user
     WHERE r.user = ? AND r.id = ?
     LIMIT 1

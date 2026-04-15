@@ -50,7 +50,7 @@ function formatDetalle(row) {
   const promedioGeneral = avg(res);
   const c = countBMA(res);
 
-  const evalName = row.evaluado_nombre || `Noemp ${row.evaluado_noemp}`;
+  const evalName = row.evaluado_nombre || `ID ${row.evaluado_noemp}`;
   const evalPuesto = row.evaluado_puesto ? ` | ${row.evaluado_puesto}` : "";
   const evalArea = row.evaluado_area ? ` | ${row.evaluado_area}` : "";
 

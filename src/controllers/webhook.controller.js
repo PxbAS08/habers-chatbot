@@ -5,7 +5,10 @@ const {
 } = require("../services/botSession.service");
 
 const { loginByNoemp } = require("../services/auth.service");
-const { getEvaluadosByUser } = require("../services/evaluados.service");
+const {
+  getAssignedEvaluado,
+  getEvaluadosByUser,
+} = require("../services/evaluados.service");
 const { saveEvaluacionDesempeno } = require("../services/evaluation.save.service");
 const { buildResumen } = require("../services/resumen.service");
 const {
@@ -111,7 +114,7 @@ function buildEvaluadosList(evaluados, page = 0, pageSize = 8) {
   const slice = evaluados.slice(start, end);
 
   const rows = slice.map((e) => ({
-    id: `emp_${e.evaluado}`,
+    id: `emp_${encodeURIComponent(String(e.evaluado))}`,
     title: String(e.evaluado).slice(0, 24),
     description: String(e.nombre || "").slice(0, 72)
   }));
@@ -143,6 +146,50 @@ function buildEvaluadosList(evaluados, page = 0, pageSize = 8) {
       }
     ]
   };
+}
+
+function isValidUserToken(value) {
+  return /^[a-zA-Z0-9_.-]+$/.test(String(value || "").trim());
+}
+
+function decodeEvaluadoSelectionId(value) {
+  if (!String(value || "").startsWith("emp_")) return null;
+
+  try {
+    return decodeURIComponent(String(value).slice(4));
+  } catch (_) {
+    return null;
+  }
+}
+
+async function startEvaluation(phone, res, elegido) {
+  await updateSession(phone, {
+    estado: "PREGUNTA",
+    evaluado_noemp: String(elegido.evaluado),
+    evaluado_nombre: elegido.nombre,
+    evaluado_puesto: elegido.puesto || "",
+    tipo: elegido.tipo,
+    pregunta_actual: 1,
+    respuestas_json: {},
+    comentario: null
+  });
+
+  const reply = {
+    type: "buttons",
+    text: `Evaluando a: ${elegido.nombre}\n\nPregunta 1/18:\n${PREGUNTAS[0]}`,
+    buttons: [
+      { id: "resp_1_1", title: "Bajo" },
+      { id: "resp_1_2", title: "Medio" },
+      { id: "resp_1_3", title: "Alto" }
+    ]
+  };
+
+  if ((process.env.WHATSAPP_MODE || "sim") === "sim") {
+    return res.json(reply);
+  }
+
+  await replyToUser(phone, reply);
+  return res.sendStatus(200);
 }
 
 exports.handleWebhookSim = async (req, res) => {
@@ -273,20 +320,19 @@ exports.handleWebhookSim = async (req, res) => {
     if (session.estado === "LOGIN") {
       const noemp = String(t).trim().toLowerCase();
 
-        if (!/^[a-zA-Z0-9]+$/.test(noemp)) {
+        if (!isValidUserToken(noemp)) {
           return res.json(msg("Por favor escribe tu *número de empleado o usuario*."));
         }
 
       const user = await loginByNoemp(noemp);
       if (!user) {
-        return res.json(msg("No. empleado o usuario no encontrado. Intenta de nuevo."));
+        return res.json(msg(
+          "Tu usuario evaluador no esta registrado o esta inactivo.\n\n" +
+          "Pide a RH que lo de de alta primero en el panel."
+        ));
       }
 
       // (mínimo de seguridad) validar que tenga evaluados asignados
-      const evaluados = await getEvaluadosByUser(user.user);
-      if (!evaluados || evaluados.length === 0) {
-        return res.json(msg("No tienes evaluados asignados. Contacta a RH."));
-      }
 
       await updateSession(phone, {
         estado: "TIPO",
@@ -333,7 +379,7 @@ exports.handleWebhookSim = async (req, res) => {
       }
 
       if (t === "2") {
-        const evaluados = await getEvaluadosByUser(session.evaluador_user);
+        const evaluados = await getEvaluadosByUser(session.evaluador_user, { extraoficial: false });
         const page = 0;
         const pageSize = 8;
 
@@ -365,9 +411,9 @@ exports.handleWebhookSim = async (req, res) => {
     }
 
     if (session.estado === "HISTORIAL_EVALUADO") {
-      console.log("Entró a HISTORIAL_EVALUADO con:", t);
+      console.log("Entro a HISTORIAL_EVALUADO con:", t);
 
-      const evaluados = await getEvaluadosByUser(session.evaluador_user);
+      const evaluados = await getEvaluadosByUser(session.evaluador_user, { extraoficial: false });
       const pageSize = 8;
       let page = Number(session.pagina_historial_evaluados || 0);
 
@@ -392,17 +438,17 @@ exports.handleWebhookSim = async (req, res) => {
           pagina_historial_evaluados: page
         });
 
-        let texto = `Selecciona el evaluado para ver sus últimas 5 evaluaciones:\n\n${lista}\n\n`;
+        let texto = `Selecciona el evaluado para ver sus ultimas 5 evaluaciones:\n\n${lista}\n\n`;
 
         if (page > 0) {
           texto += `Escribe "anterior" para regresar.\n`;
         }
 
         if (fin < evaluados.length) {
-          texto += `Escribe "siguiente" para ver más evaluados.\n`;
+          texto += `Escribe "siguiente" para ver mas evaluados.\n`;
         }
 
-        texto += `Responde con un número del 1 al ${Math.min(pageSize, evaluados.slice(inicio, fin).length)}.`;
+        texto += `Responde con un numero del 1 al ${Math.min(pageSize, evaluados.slice(inicio, fin).length)}.`;
 
         return res.json(msg(texto));
       }
@@ -413,7 +459,7 @@ exports.handleWebhookSim = async (req, res) => {
       const idx = Number(t) - 1;
 
       if (Number.isNaN(idx) || idx < 0 || idx >= listaReducida.length) {
-        return res.json(msg("Selecciona un número válido, o escribe siguiente/anterior."));
+        return res.json(msg("Selecciona un numero valido, o escribe siguiente/anterior."));
       }
 
       const elegido = listaReducida[idx];
@@ -429,11 +475,32 @@ exports.handleWebhookSim = async (req, res) => {
       const historialTexto = formatHistorial(rows).slice(0, 700);
 
       return res.json(msg(
-        `Últimas 5 evaluaciones de:\n${elegido.evaluado} - ${elegido.nombre}\n\n` +
+        `Ultimas 5 evaluaciones de:\n${elegido.evaluado} - ${elegido.nombre}\n\n` +
         `${historialTexto}\n\n` +
         `Escribe: detalle 1, detalle 2, ... detalle 5.\n\n` +
-        `También puedes escribir tu número de empleado para iniciar otra vez.`
+        `Tambien puedes escribir tu numero de empleado para iniciar otra vez.`
       ));
+    }
+    if (session.estado === "TIPO" && (t === "2" || t === "tipo_extra")) {
+      await updateSession(phone, {
+        estado: "EVALUADO_EXTRA_INPUT",
+        tipo_eval: "EXTRA",
+        pagina_evaluados: 0
+      });
+
+      const reply = {
+        type: "text",
+        text:
+          "Escribe el *usuario* del evaluado extraoficial.\n\n" +
+          "Si no esta registrado o no esta asignado contigo, RH debe darlo de alta primero en el panel."
+      };
+
+      if ((process.env.WHATSAPP_MODE || "sim") === "sim") {
+        return res.json(reply);
+      }
+
+      await replyToUser(phone, reply);
+      return res.sendStatus(200);
     }
 
     if (session.estado === "TIPO") {
@@ -460,10 +527,17 @@ exports.handleWebhookSim = async (req, res) => {
         return res.sendStatus(200);
       }
 
-      const evaluados = await getEvaluadosByUser(session.evaluador_user);
+      const evaluados = await getEvaluadosByUser(session.evaluador_user, { extraoficial: false });
+
+      if (!evaluados.length) {
+        return res.json(msg(
+          "No tienes evaluados oficiales activos asignados.\n\n" +
+          "Pide a RH que los registre o actualice en el panel."
+        ));
+      }
 
       const rows = evaluados.slice(0, 8).map((e) => ({
-        id: `emp_${e.evaluado}`,
+        id: `emp_${encodeURIComponent(String(e.evaluado))}`,
         title: String(e.evaluado).slice(0, 24),
         description: String(e.nombre || "").slice(0, 72)
       }));
@@ -505,7 +579,7 @@ exports.handleWebhookSim = async (req, res) => {
     }
 
     if (session.estado === "EVALUADO") {
-      const evaluados = await getEvaluadosByUser(session.evaluador_user);
+      const evaluados = await getEvaluadosByUser(session.evaluador_user, { extraoficial: false });
       const page = Number(session.pagina_evaluados || 0);
       const pageSize = 8;
 
@@ -516,7 +590,7 @@ exports.handleWebhookSim = async (req, res) => {
         const end = start + pageSize;
 
         const rows = evaluados.slice(start, end).map((e) => ({
-          id: `emp_${e.evaluado}`,
+          id: `emp_${encodeURIComponent(String(e.evaluado))}`,
           title: String(e.evaluado).slice(0, 24),
           description: String(e.nombre || "").slice(0, 72)
         }));
@@ -567,7 +641,7 @@ exports.handleWebhookSim = async (req, res) => {
         const end = start + pageSize;
 
         const rows = evaluados.slice(start, end).map((e) => ({
-          id: `emp_${e.evaluado}`,
+          id: `emp_${encodeURIComponent(String(e.evaluado))}`,
           title: String(e.evaluado).slice(0, 24),
           description: String(e.nombre || "").slice(0, 72)
         }));
@@ -615,9 +689,10 @@ exports.handleWebhookSim = async (req, res) => {
       // selección real del evaluado
       let elegido = null;
 
-      if (/^emp_\d+$/.test(t)) {
-        const noemp = t.replace("emp_", "");
-        elegido = evaluados.find(e => String(e.evaluado) === String(noemp));
+      const selectedEvaluado = decodeEvaluadoSelectionId(t);
+
+      if (selectedEvaluado) {
+        elegido = evaluados.find(e => String(e.evaluado) === String(selectedEvaluado));
       } else if (/^\d+$/.test(t)) {
         elegido = evaluados.find(e => String(e.evaluado) === String(t));
       }
@@ -627,7 +702,7 @@ exports.handleWebhookSim = async (req, res) => {
         const end = start + pageSize;
 
         const rows = evaluados.slice(start, end).map((e) => ({
-          id: `emp_${e.evaluado}`,
+          id: `emp_${encodeURIComponent(String(e.evaluado))}`,
           title: String(e.evaluado).slice(0, 24),
           description: String(e.nombre || "").slice(0, 72)
         }));
@@ -670,33 +745,31 @@ exports.handleWebhookSim = async (req, res) => {
         return res.sendStatus(200);
       }
 
-      await updateSession(phone, {
-        estado: "PREGUNTA",
-        evaluado_noemp: elegido.evaluado,
-        evaluado_nombre: elegido.nombre,
-        evaluado_puesto: elegido.puesto || "",
-        tipo: elegido.tipo,
-        pregunta_actual: 1,
-        respuestas_json: {},
-        comentario: null
-      });
+      return startEvaluation(phone, res, elegido);
+    }
 
-      const reply = {
-        type: "buttons",
-        text: `Evaluando a: ${elegido.nombre}\n\nPregunta 1/18:\n${PREGUNTAS[0]}`,
-        buttons: [
-          { id: "resp_1_1", title: "Bajo" },
-          { id: "resp_1_2", title: "Medio" },
-          { id: "resp_1_3", title: "Alto" }
-        ]
-      };
+    if (session.estado === "EVALUADO_EXTRA_INPUT") {
+      const evaluadoUser = String(t).trim().toLowerCase();
 
-      if ((process.env.WHATSAPP_MODE || "sim") === "sim") {
-        return res.json(reply);
+      if (!isValidUserToken(evaluadoUser)) {
+        return res.json(msg(
+          "Escribe un *usuario* valido para el evaluado extraoficial.\n\n" +
+          "Ejemplo: usuario.apellido"
+        ));
       }
 
-      await replyToUser(phone, reply);
-      return res.sendStatus(200);
+      const elegido = await getAssignedEvaluado(session.evaluador_user, evaluadoUser, {
+        extraoficial: true,
+      });
+
+      if (!elegido) {
+        return res.json(msg(
+          "Ese evaluado extraoficial no esta registrado o no esta asignado contigo.\n\n" +
+          "RH debe darlo de alta primero en el panel."
+        ));
+      }
+
+      return startEvaluation(phone, res, elegido);
     }
 
     if (session.estado === "PREGUNTA") {
