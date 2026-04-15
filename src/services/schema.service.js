@@ -27,6 +27,7 @@ async function ensureDatabaseSchema() {
   await db.query(
     "ALTER TABLE users MODIFY user VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL"
   );
+  await db.query("ALTER TABLE users MODIFY Noemp INT NULL");
   await ensureColumn("users", "activo", "TINYINT(1) NOT NULL DEFAULT 1");
   await db.query("UPDATE users SET activo = 1 WHERE activo IS NULL");
 

@@ -37,7 +37,7 @@ function buildQuery(basePath, params = {}) {
 function redirectWithFlash(res, basePath, status, message, extras = {}) {
   return res.redirect(
     buildQuery(basePath, {
-      status,
+      flashStatus: status,
       message,
       ...extras,
     })
@@ -46,11 +46,20 @@ function redirectWithFlash(res, basePath, status, message, extras = {}) {
 
 function renderFlash(query) {
   const message = query.message ? escapeHtml(query.message) : "";
-  const status = query.status === "error" ? "error" : "success";
+  const status = query.flashStatus === "error" ? "error" : "success";
 
   if (!message) return "";
 
   return `<div class="flash ${status}">${message}</div>`;
+}
+
+function getEvaluadosFilterState(source = {}) {
+  return {
+    busqueda: source.busqueda || "",
+    status: source.status || "activos",
+    tipoRegistro: source.tipoRegistro || "todos",
+    evaluadorUser: source.evaluadorUser || "",
+  };
 }
 
 function renderLayout({ title, activeTab, intro, flash, content }) {
@@ -396,7 +405,7 @@ exports.viewEvaluadores = async (req, res) => {
                   <strong>${escapeHtml(row.Nombre)}</strong><br>
                   <span class="small">Usuario: ${escapeHtml(row.user)}</span>
                 </td>
-                <td>${escapeHtml(row.Noemp)}</td>
+                <td>${escapeHtml(row.Noemp || "-")}</td>
                 <td>${escapeHtml(row.Puesto)}</td>
                 <td>${escapeHtml(row.Area)}</td>
                 <td>${statusBadge}</td>
@@ -426,11 +435,12 @@ exports.viewEvaluadores = async (req, res) => {
               ${editItem ? `<input type="hidden" name="originalUser" value="${escapeHtml(editItem.user)}" />` : ""}
               <div class="field">
                 <label>Usuario</label>
-                <input name="user" value="${escapeHtml(editItem?.user || "")}" required />
+                <input name="user" value="${escapeHtml(editItem?.user || "")}" />
               </div>
               <div class="field">
                 <label>No. empleado</label>
-                <input name="noemp" inputmode="numeric" value="${escapeHtml(editItem?.Noemp || "")}" required />
+                <input name="noemp" inputmode="numeric" value="${escapeHtml(editItem?.Noemp || "")}" />
+                <div class="hint">Puedes llenar solo uno de estos dos campos. Si solo capturas No. de empleado, el sistema lo usara tambien como usuario.</div>
               </div>
               <div class="field">
                 <label>Nombre</label>
@@ -551,24 +561,37 @@ exports.changeEvaluadorStatus = async (req, res) => {
 exports.viewEvaluados = async (req, res) => {
   try {
     const filters = {
-      busqueda: req.query.busqueda || "",
-      status: req.query.status || "activos",
-      tipoRegistro: req.query.tipoRegistro || "todos",
+      ...getEvaluadosFilterState(req.query),
       editUser: req.query.editUser || "",
       editEvaluado: req.query.editEvaluado || "",
     };
+    const listFilters = getEvaluadosFilterState(filters);
 
     const [evaluados, evaluadores, editItem] = await Promise.all([
-      listEvaluados(filters),
+      listEvaluados(listFilters),
       listEvaluadores({ status: "activos" }),
       filters.editUser && filters.editEvaluado
         ? getAssignedEvaluado(filters.editUser, filters.editEvaluado, { includeInactive: true })
         : Promise.resolve(null),
     ]);
 
+    const selectedEvaluadorValue = String(editItem?.user || filters.evaluadorUser || "").toLowerCase();
+    const selectedEvaluadorFilter = evaluadores.find(
+      (row) => String(row.user || "").toLowerCase() === String(filters.evaluadorUser || "").toLowerCase()
+    );
+    const filterInputsHtml = Object.entries(listFilters)
+      .filter(([, value]) => value !== undefined && value !== null && value !== "")
+      .map(
+        ([key, value]) =>
+          `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(value)}" />`
+      )
+      .join("");
+
     const evaluadorOptions = evaluadores
       .map((row) => {
-        const selected = row.user === (editItem?.user || "") ? "selected" : "";
+        const selected = String(row.user || "").toLowerCase() === selectedEvaluadorValue
+          ? "selected"
+          : "";
         return `<option value="${escapeHtml(row.user)}" ${selected}>${escapeHtml(row.user)} - ${escapeHtml(row.Nombre)}</option>`;
       })
       .join("");
@@ -588,6 +611,7 @@ exports.viewEvaluados = async (req, res) => {
                   <input type="hidden" name="evaluador_user" value="${escapeHtml(row.user)}" />
                   <input type="hidden" name="evaluado" value="${escapeHtml(row.evaluado)}" />
                   <input type="hidden" name="activo" value="0" />
+                  ${filterInputsHtml}
                   <button class="danger-btn" type="submit">Dar de baja</button>
                 </form>
               `
@@ -596,6 +620,7 @@ exports.viewEvaluados = async (req, res) => {
                   <input type="hidden" name="evaluador_user" value="${escapeHtml(row.user)}" />
                   <input type="hidden" name="evaluado" value="${escapeHtml(row.evaluado)}" />
                   <input type="hidden" name="activo" value="1" />
+                  ${filterInputsHtml}
                   <button class="success-btn" type="submit">Reactivar</button>
                 </form>
               `;
@@ -617,9 +642,7 @@ exports.viewEvaluados = async (req, res) => {
                     <a class="table-link" href="${buildQuery("/reportes/evaluados", {
                       editUser: row.user,
                       editEvaluado: row.evaluado,
-                      busqueda: filters.busqueda,
-                      status: filters.status,
-                      tipoRegistro: filters.tipoRegistro,
+                      ...listFilters,
                     })}">Editar</a>
                     ${statusAction}
                   </div>
@@ -633,6 +656,9 @@ exports.viewEvaluados = async (req, res) => {
     const formTitle = editItem ? "Modificar evaluado" : "Alta de evaluado";
     const formButton = editItem ? "Guardar cambios" : "Dar de alta";
     const selectedTipo = String(editItem?.es_extraoficial || 0);
+    const filterMessage = filters.evaluadorUser
+      ? `<div class="hint">Mostrando solo los evaluados asignados a <strong>${escapeHtml(selectedEvaluadorFilter?.Nombre || filters.evaluadorUser)}</strong>.</div>`
+      : '<div class="hint">Si seleccionas un evaluador en el formulario de la izquierda, la lista de la derecha se filtrara automaticamente por ese evaluador.</div>';
 
     const content = `
       <div class="grid">
@@ -644,6 +670,7 @@ exports.viewEvaluados = async (req, res) => {
             ${evaluadores.length === 0 ? '<div class="flash error">Primero debes dar de alta al menos un evaluador activo.</div>' : ""}
 
             <form method="POST" action="/reportes/evaluados/guardar">
+              ${filterInputsHtml}
               ${editItem ? `
                 <input type="hidden" name="original_user" value="${escapeHtml(editItem.user)}" />
                 <input type="hidden" name="original_evaluado" value="${escapeHtml(editItem.evaluado)}" />
@@ -651,10 +678,11 @@ exports.viewEvaluados = async (req, res) => {
 
               <div class="field">
                 <label>Evaluador asignado</label>
-                <select name="evaluador_user" required>
+                <select id="evaluador-user-select" name="evaluador_user" required>
                   <option value="">Selecciona un evaluador</option>
                   ${evaluadorOptions}
                 </select>
+                <div class="hint">Al cambiar este evaluador, la tabla de la derecha mostrara primero solo sus evaluados asignados.</div>
               </div>
 
               <div class="field">
@@ -694,7 +722,7 @@ exports.viewEvaluados = async (req, res) => {
 
               <div class="actions">
                 <button class="submit-btn" type="submit" ${evaluadores.length === 0 ? "disabled" : ""}>${formButton}</button>
-                ${editItem ? '<a class="secondary-link" href="/reportes/evaluados">Cancelar edici&oacute;n</a>' : ""}
+                ${editItem ? `<a class="secondary-link" href="${buildQuery("/reportes/evaluados", listFilters)}">Cancelar edici&oacute;n</a>` : ""}
               </div>
             </form>
           </div>
@@ -704,8 +732,10 @@ exports.viewEvaluados = async (req, res) => {
           <div class="card">
             <h2>Listado de evaluados</h2>
             <p>Desde aqu&iacute; controlas altas, bajas y cambios de asignaci&oacute;n para evaluaciones normales y extra.</p>
+            ${filterMessage}
 
             <form class="filters" method="GET" action="/reportes/evaluados">
+              ${filters.evaluadorUser ? `<input type="hidden" name="evaluadorUser" value="${escapeHtml(filters.evaluadorUser)}" />` : ""}
               <div class="field" style="min-width: 220px; margin-bottom: 0;">
                 <label>B&uacute;squeda</label>
                 <input name="busqueda" placeholder="Nombre, evaluador o identificador" value="${escapeHtml(filters.busqueda)}" />
@@ -752,6 +782,28 @@ exports.viewEvaluados = async (req, res) => {
           </div>
         </div>
       </div>
+      <script>
+        (function () {
+          const select = document.getElementById("evaluador-user-select");
+          if (!select) return;
+
+          select.addEventListener("change", function () {
+            const url = new URL(window.location.href);
+            url.searchParams.delete("editUser");
+            url.searchParams.delete("editEvaluado");
+            url.searchParams.delete("message");
+            url.searchParams.delete("flashStatus");
+
+            if (this.value) {
+              url.searchParams.set("evaluadorUser", this.value);
+            } else {
+              url.searchParams.delete("evaluadorUser");
+            }
+
+            window.location.href = url.pathname + (url.searchParams.toString() ? "?" + url.searchParams.toString() : "");
+          });
+        })();
+      </script>
     `;
 
     res.send(
@@ -770,14 +822,28 @@ exports.viewEvaluados = async (req, res) => {
 };
 
 exports.saveEvaluado = async (req, res) => {
+  const filterState = getEvaluadosFilterState(req.body);
+
   try {
     if (req.body.original_user && req.body.original_evaluado) {
       await updateEvaluado(req.body);
-      return redirectWithFlash(res, "/reportes/evaluados", "success", "Evaluado actualizado correctamente.");
+      return redirectWithFlash(
+        res,
+        "/reportes/evaluados",
+        "success",
+        "Evaluado actualizado correctamente.",
+        filterState
+      );
     }
 
     await createEvaluado(req.body);
-    return redirectWithFlash(res, "/reportes/evaluados", "success", "Evaluado dado de alta correctamente.");
+    return redirectWithFlash(
+      res,
+      "/reportes/evaluados",
+      "success",
+      "Evaluado dado de alta correctamente.",
+      filterState
+    );
   } catch (error) {
     console.error(error);
     return redirectWithFlash(
@@ -786,13 +852,19 @@ exports.saveEvaluado = async (req, res) => {
       "error",
       error.message,
       req.body.original_user && req.body.original_evaluado
-        ? { editUser: req.body.original_user, editEvaluado: req.body.original_evaluado }
-        : {}
+        ? {
+            ...filterState,
+            editUser: req.body.original_user,
+            editEvaluado: req.body.original_evaluado,
+          }
+        : filterState
     );
   }
 };
 
 exports.changeEvaluadoStatus = async (req, res) => {
+  const filterState = getEvaluadosFilterState(req.body);
+
   try {
     await setEvaluadoActivo(
       req.body.evaluador_user,
@@ -804,9 +876,9 @@ exports.changeEvaluadoStatus = async (req, res) => {
       ? "Evaluado reactivado correctamente."
       : "Evaluado dado de baja correctamente.";
 
-    return redirectWithFlash(res, "/reportes/evaluados", "success", message);
+    return redirectWithFlash(res, "/reportes/evaluados", "success", message, filterState);
   } catch (error) {
     console.error(error);
-    return redirectWithFlash(res, "/reportes/evaluados", "error", error.message);
+    return redirectWithFlash(res, "/reportes/evaluados", "error", error.message, filterState);
   }
 };

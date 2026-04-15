@@ -10,18 +10,34 @@ function normalizeUser(value) {
 
 function assertUserFormat(user) {
   if (!/^[a-zA-Z0-9_.-]+$/.test(user)) {
-    throw new Error("El usuario del evaluador solo puede contener letras, números, punto, guion o guion bajo.");
+    throw new Error("El usuario del evaluador solo puede contener letras, numeros, punto, guion o guion bajo.");
   }
 }
 
 function parseNoemp(value) {
   const clean = cleanText(value);
 
+  if (!clean) {
+    return null;
+  }
+
   if (!/^\d+$/.test(clean)) {
-    throw new Error("El número de empleado del evaluador debe ser numérico.");
+    throw new Error("El numero de empleado del evaluador debe ser numerico.");
   }
 
   return Number(clean);
+}
+
+function resolveEvaluatorIdentity(data) {
+  const rawUser = normalizeUser(data.user);
+  const noemp = parseNoemp(data.noemp);
+  const user = rawUser || (noemp != null ? String(noemp) : "");
+
+  if (!user && noemp == null) {
+    throw new Error("Debes capturar al menos usuario o numero de empleado del evaluador.");
+  }
+
+  return { user, noemp };
 }
 
 async function getEvaluadorByUser(user, options = {}) {
@@ -38,6 +54,29 @@ async function getEvaluadorByUser(user, options = {}) {
        ${activeSql}
      LIMIT 1`,
     [normalized]
+  );
+
+  return rows[0] || null;
+}
+
+async function getEvaluadorByIdentity(value, options = {}) {
+  const raw = cleanText(value);
+  if (!raw) return null;
+
+  const normalized = normalizeUser(raw);
+  const { includeInactive = false, connection = db } = options;
+  const activeSql = includeInactive ? "" : "AND COALESCE(activo, 1) = 1";
+
+  const [rows] = await connection.query(
+    `SELECT user, Noemp, Nombre, Puesto, Area, COALESCE(activo, 1) AS activo
+     FROM users
+     WHERE (
+       LOWER(user) = LOWER(?)
+       OR CAST(Noemp AS CHAR) = ?
+     )
+       ${activeSql}
+     LIMIT 1`,
+    [normalized, raw]
   );
 
   return rows[0] || null;
@@ -103,29 +142,33 @@ async function listEvaluadores(filters = {}) {
 }
 
 async function createEvaluador(data) {
-  const user = normalizeUser(data.user);
-  const noemp = parseNoemp(data.noemp);
+  const { user, noemp } = resolveEvaluatorIdentity(data);
   const nombre = cleanText(data.nombre);
   const puesto = cleanText(data.puesto);
   const area = cleanText(data.area);
 
-  if (!user || !nombre || !puesto || !area) {
-    throw new Error("Debes capturar usuario, número de empleado, nombre, puesto y área del evaluador.");
+  if (!nombre || !puesto || !area) {
+    throw new Error("Debes capturar nombre, puesto y area del evaluador.");
   }
 
   assertUserFormat(user);
 
-  const [duplicates] = await db.query(
-    `SELECT user, Noemp
-     FROM users
-     WHERE LOWER(user) = LOWER(?)
-        OR Noemp = ?
-     LIMIT 1`,
-    [user, noemp]
-  );
+  const duplicateSql = noemp == null
+    ? `SELECT user, Noemp
+       FROM users
+       WHERE LOWER(user) = LOWER(?)
+       LIMIT 1`
+    : `SELECT user, Noemp
+       FROM users
+       WHERE LOWER(user) = LOWER(?)
+          OR Noemp = ?
+       LIMIT 1`;
+
+  const duplicateParams = noemp == null ? [user] : [user, noemp];
+  const [duplicates] = await db.query(duplicateSql, duplicateParams);
 
   if (duplicates.length) {
-    throw new Error("Ya existe un evaluador con ese usuario o número de empleado.");
+    throw new Error("Ya existe un evaluador con ese usuario o numero de empleado.");
   }
 
   await db.query(
@@ -139,13 +182,12 @@ async function createEvaluador(data) {
 
 async function updateEvaluador(data) {
   const originalUser = normalizeUser(data.originalUser);
-  const user = normalizeUser(data.user);
-  const noemp = parseNoemp(data.noemp);
+  const { user, noemp } = resolveEvaluatorIdentity(data);
   const nombre = cleanText(data.nombre);
   const puesto = cleanText(data.puesto);
   const area = cleanText(data.area);
 
-  if (!originalUser || !user || !nombre || !puesto || !area) {
+  if (!originalUser || !nombre || !puesto || !area) {
     throw new Error("Faltan datos para actualizar el evaluador.");
   }
 
@@ -165,17 +207,26 @@ async function updateEvaluador(data) {
       throw new Error("El evaluador a modificar ya no existe.");
     }
 
-    const [duplicates] = await connection.query(
-      `SELECT user, Noemp
-       FROM users
-       WHERE (LOWER(user) = LOWER(?) OR Noemp = ?)
-         AND LOWER(user) <> LOWER(?)
-       LIMIT 1`,
-      [user, noemp, originalUser]
-    );
+    const duplicateSql = noemp == null
+      ? `SELECT user, Noemp
+         FROM users
+         WHERE LOWER(user) = LOWER(?)
+           AND LOWER(user) <> LOWER(?)
+         LIMIT 1`
+      : `SELECT user, Noemp
+         FROM users
+         WHERE (LOWER(user) = LOWER(?) OR Noemp = ?)
+           AND LOWER(user) <> LOWER(?)
+         LIMIT 1`;
+
+    const duplicateParams = noemp == null
+      ? [user, originalUser]
+      : [user, noemp, originalUser];
+
+    const [duplicates] = await connection.query(duplicateSql, duplicateParams);
 
     if (duplicates.length) {
-      throw new Error("Ya existe otro evaluador con ese usuario o número de empleado.");
+      throw new Error("Ya existe otro evaluador con ese usuario o numero de empleado.");
     }
 
     await connection.query(
@@ -221,7 +272,7 @@ async function updateEvaluador(data) {
 async function setEvaluadorActivo(user, activo) {
   const normalized = normalizeUser(user);
   if (!normalized) {
-    throw new Error("Evaluador inválido.");
+    throw new Error("Evaluador invalido.");
   }
 
   const [result] = await db.query(
@@ -232,7 +283,7 @@ async function setEvaluadorActivo(user, activo) {
   );
 
   if (!result.affectedRows) {
-    throw new Error("No se encontró el evaluador solicitado.");
+    throw new Error("No se encontro el evaluador solicitado.");
   }
 
   return { user: normalized, activo: activo ? 1 : 0 };
@@ -240,6 +291,7 @@ async function setEvaluadorActivo(user, activo) {
 
 module.exports = {
   createEvaluador,
+  getEvaluadorByIdentity,
   getEvaluadorByUser,
   listEvaluadores,
   setEvaluadorActivo,

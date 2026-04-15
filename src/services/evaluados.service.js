@@ -1,5 +1,8 @@
 const db = require("../config/database");
-const { getEvaluadorByUser } = require("./evaluadores.service");
+const {
+  getEvaluadorByIdentity,
+  getEvaluadorByUser,
+} = require("./evaluadores.service");
 
 function cleanText(value) {
   return String(value || "").trim();
@@ -113,9 +116,12 @@ async function listEvaluados(filters = {}) {
   const tipoRegistro = filters.tipoRegistro || "todos";
   const status = filters.status || "activos";
   const busqueda = cleanText(filters.busqueda);
+  const evaluadorUser = normalizeUser(filters.evaluadorUser);
 
   const where = [];
   const values = [];
+  const orderValues = [];
+  let orderSql = "ORDER BY COALESCE(e.activo, 1) DESC, e.nombre ASC, e.evaluado ASC";
 
   if (tipoRegistro === "oficial") {
     where.push("COALESCE(e.es_extraoficial, 0) = 0");
@@ -129,16 +135,74 @@ async function listEvaluados(filters = {}) {
     where.push("COALESCE(e.activo, 1) = 0");
   }
 
-  if (busqueda) {
+  if (evaluadorUser) {
+    where.push("LOWER(e.user) = LOWER(?)");
+    values.push(evaluadorUser);
+  }
+
+  if (busqueda && !evaluadorUser) {
+    const matchedEvaluador = await getEvaluadorByIdentity(busqueda, {
+      includeInactive: true,
+    });
+
+    if (matchedEvaluador) {
+      const relatedEvaluados = Array.from(
+        new Set(
+          [matchedEvaluador.user, matchedEvaluador.Noemp != null ? String(matchedEvaluador.Noemp) : ""]
+            .map((value) => normalizeUser(value))
+            .filter(Boolean)
+        )
+      );
+      const relatedPlaceholders = relatedEvaluados.map(() => "?").join(", ");
+
+      where.push(`(
+        LOWER(e.user) = LOWER(?)
+        OR LOWER(TRIM(e.evaluado)) IN (${relatedPlaceholders})
+      )`);
+      values.push(matchedEvaluador.user, ...relatedEvaluados);
+
+      orderSql = `ORDER BY
+        CASE
+          WHEN LOWER(e.user) = LOWER(?) THEN 0
+          WHEN LOWER(TRIM(e.evaluado)) IN (${relatedPlaceholders}) THEN 1
+          ELSE 2
+        END,
+        COALESCE(e.activo, 1) DESC,
+        e.nombre ASC,
+        e.evaluado ASC`;
+      orderValues.push(matchedEvaluador.user, ...relatedEvaluados);
+    } else {
+      where.push(`(
+        LOWER(e.user) LIKE LOWER(?)
+        OR LOWER(e.evaluado) LIKE LOWER(?)
+        OR CAST(u.Noemp AS CHAR) LIKE ?
+        OR COALESCE(e.nombre, '') LIKE ?
+        OR COALESCE(e.puesto, '') LIKE ?
+        OR COALESCE(e.area, '') LIKE ?
+        OR COALESCE(u.Nombre, '') LIKE ?
+      )`);
+      values.push(
+        `%${busqueda}%`,
+        `%${busqueda}%`,
+        `%${busqueda}%`,
+        `%${busqueda}%`,
+        `%${busqueda}%`,
+        `%${busqueda}%`,
+        `%${busqueda}%`
+      );
+    }
+  } else if (busqueda) {
     where.push(`(
       LOWER(e.user) LIKE LOWER(?)
       OR LOWER(e.evaluado) LIKE LOWER(?)
+      OR CAST(u.Noemp AS CHAR) LIKE ?
       OR COALESCE(e.nombre, '') LIKE ?
       OR COALESCE(e.puesto, '') LIKE ?
       OR COALESCE(e.area, '') LIKE ?
       OR COALESCE(u.Nombre, '') LIKE ?
     )`);
     values.push(
+      `%${busqueda}%`,
       `%${busqueda}%`,
       `%${busqueda}%`,
       `%${busqueda}%`,
@@ -166,8 +230,8 @@ async function listEvaluados(filters = {}) {
      LEFT JOIN users u
        ON LOWER(u.user) = LOWER(e.user)
      ${whereSql}
-     ORDER BY COALESCE(e.activo, 1) DESC, e.nombre ASC, e.evaluado ASC`,
-    values
+     ${orderSql}`,
+    [...values, ...orderValues]
   );
 
   return rows;
