@@ -18,6 +18,29 @@ async function setTableCollation(table) {
   );
 }
 
+async function normalizeUsersNoempValues() {
+  const column = await getColumn("users", "Noemp");
+  if (!column) return;
+
+  const type = String(column.Type || "").toLowerCase();
+  if (type.includes("int")) return;
+
+  await db.query(
+    `UPDATE users
+     SET Noemp = NULL
+     WHERE Noemp IS NOT NULL
+       AND TRIM(CAST(Noemp AS CHAR)) = ''`
+  );
+
+  await db.query(
+    `UPDATE users
+     SET Noemp = NULL
+     WHERE Noemp IS NOT NULL
+       AND TRIM(CAST(Noemp AS CHAR)) <> ''
+       AND TRIM(CAST(Noemp AS CHAR)) NOT REGEXP '^[0-9]+$'`
+  );
+}
+
 async function ensureDatabaseSchema() {
   await setTableCollation("users");
   await setTableCollation("evaluados");
@@ -27,6 +50,7 @@ async function ensureDatabaseSchema() {
   await db.query(
     "ALTER TABLE users MODIFY user VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL"
   );
+  await normalizeUsersNoempValues();
   await db.query("ALTER TABLE users MODIFY Noemp INT NULL");
   await ensureColumn("users", "activo", "TINYINT(1) NOT NULL DEFAULT 1");
   await db.query("UPDATE users SET activo = 1 WHERE activo IS NULL");
